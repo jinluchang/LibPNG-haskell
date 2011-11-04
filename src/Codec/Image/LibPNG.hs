@@ -105,6 +105,12 @@ c_PNG_COMPRESSION_TYPE_BASE = 0
 c_PNG_FILTER_TYPE_BASE :: Int
 c_PNG_FILTER_TYPE_BASE = 0
 
+c_PNG_COLOR_TYPE_RGB :: Word8
+c_PNG_COLOR_TYPE_RGB = 2
+
+c_PNG_FILLER_AFTER :: Int
+c_PNG_FILLER_AFTER = 1
+
 foreign import ccall "png.h png_create_read_struct"
     c_png_create_read_struct :: CString -> Ptr () -> Ptr () -> Ptr ()
                              -> IO PNG
@@ -153,6 +159,12 @@ foreign import ccall "png.h png_get_image_width"
 
 foreign import ccall "png.h png_get_image_height"
     c_png_get_image_height :: PNG -> PNGInfo -> IO Word
+
+foreign import ccall "png.h png_get_color_type"
+    c_png_get_color_type :: PNG -> PNGInfo -> IO Word8
+
+foreign import ccall "png.h png_set_filler"
+    c_png_set_filler :: PNG -> Word -> Int -> IO ()
 
 type RowPtrPointer = Ptr (Ptr Word8)
 
@@ -212,6 +224,10 @@ readPNGImage pngFilename = withCString pngFilename $ \c_png_filename -> do
     c_png_read_info png info
     width <- c_png_get_image_width png info
     height <- c_png_get_image_height png info
+    color_type <- c_png_get_color_type png info
+    if color_type == c_PNG_COLOR_TYPE_RGB
+        then c_png_set_filler png 255 c_PNG_FILLER_AFTER
+        else return ()
     rows <- replicateM (fromIntegral $ height) (rowEmpty width)
     withForeignPtrs (map foreignPtrRow rows) $
         \rowps -> withArray rowps $
