@@ -1,6 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module LibPNG where
+module Codec.Image.LibPNG where
 
 import Foreign
 import Foreign.C.String
