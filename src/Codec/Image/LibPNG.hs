@@ -6,6 +6,7 @@ import Foreign
 import Foreign.C.String
 import Control.Monad
 import Data.List
+import System.IO.Unsafe
 
 newtype PNG = PNG (Ptr ())
 
@@ -89,12 +90,12 @@ imageFromPixelss pixelss = do
 
 -- extract a list of list of pixels from a image
 pixelssFromImage :: PNGImage -> IO [[Pixel]]
-pixelssFromImage image = mapM ( pixelsFromRow width ) rows where
+pixelssFromImage image = mapM (pixelsFromRow width) rows where
     width = widthImage image
     rows = rowsImage image
 
 c_PNG_LIBPNG_VER_STRING :: CString
-c_PNG_LIBPNG_VER_STRING = unsafePerformIO $ newCString "1.2.44"
+c_PNG_LIBPNG_VER_STRING = unsafePerformIO $ newCString "1.6.16"
 
 c_PNG_INTERLACE_NONE :: Int
 c_PNG_INTERLACE_NONE = 0
