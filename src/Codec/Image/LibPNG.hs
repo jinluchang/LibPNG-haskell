@@ -28,10 +28,10 @@ whitePixel :: Pixel
 whitePixel = Pixel ( 255, 255, 255, 255 )
 
 redPixel :: Pixel
-redPixel = Pixel ( 255, 255, 0, 0 )
+redPixel = Pixel ( 255, 0, 0, 255 )
 
 greenPixel :: Pixel
-greenPixel = Pixel ( 255, 0, 255, 0 )
+greenPixel = Pixel ( 0, 255, 0, 255)
 
 bluePixel :: Pixel
 bluePixel = Pixel ( 255, 0, 0, 255 )
