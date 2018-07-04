@@ -4,6 +4,7 @@ module Codec.Image.LibPNG where
 
 import Foreign
 import Foreign.C.String
+import Foreign.C.Types (CSize(..))
 import Control.Monad
 import Data.List
 import System.IO.Unsafe
@@ -181,6 +182,21 @@ foreign import ccall "png.h png_read_end"
 foreign import ccall "png.h png_write_end"
     c_png_write_end :: PNG -> Ptr () -> IO ()
 
+foreign import ccall "wrapper"
+    c_wrapReadFn :: (PNG -> Ptr Word8 -> CSize -> IO ()) -> IO (FunPtr (PNG -> Ptr Word8 -> CSize -> IO ()))
+
+foreign import ccall "wrapper"
+    c_wrapWriteFn :: (PNG -> Ptr Word8 -> CSize -> IO ()) -> IO (FunPtr (PNG -> Ptr Word8 -> CSize -> IO ()))
+
+foreign import ccall "wrapper"
+    c_wrapFlushFn :: (PNG -> IO ()) -> IO (FunPtr (PNG -> IO ()))
+
+foreign import ccall "png.h png_set_read_fn"
+    c_png_set_read_fn :: PNG -> Ptr () -> FunPtr (PNG -> Ptr Word8 -> CSize -> IO ()) -> IO ()
+
+foreign import ccall "png.h png_set_write_fn"
+    c_png_set_write_fn :: PNG -> Ptr () -> FunPtr (PNG -> Ptr Word8 -> CSize -> IO ()) -> FunPtr (PNG -> IO ()) -> IO ()
+
 withForeignPtrs :: [ForeignPtr a] -> ([Ptr a] -> IO b) -> IO b
 withForeignPtrs [] action = action []
 withForeignPtrs (x:xs) action =
@@ -215,6 +231,28 @@ writePNGImage pngFilename image =
     c_fclose file
 
 --
+writePNGImageWithCallbacks :: (Ptr Word8 -> CSize -> IO ()) -> IO () -> PNGImage -> IO ()
+writePNGImageWithCallbacks writeFN flushFN image = do
+  writePtr <- c_wrapWriteFn (const writeFN)
+  flushPtr <- c_wrapFlushFn (const flushFN)
+  png <- c_png_create_write_struct
+        c_PNG_LIBPNG_VER_STRING nullPtr nullPtr nullPtr
+  info <- c_png_create_info_struct png
+  c_png_set_write_fn png nullPtr writePtr flushPtr
+  let width = widthImage image
+      height = heightImage image
+      rows = rowsImage image
+  c_png_set_IHDR png info width height 8 6
+      c_PNG_INTERLACE_NONE c_PNG_COMPRESSION_TYPE_BASE c_PNG_FILTER_TYPE_BASE
+  c_png_write_info png info
+  withForeignPtrs (map foreignPtrRow rows) $
+      \rowps -> withArray rowps $
+      \rowpp -> c_png_write_image png rowpp
+  c_png_write_end png nullPtr
+  freeHaskellFunPtr writePtr
+  freeHaskellFunPtr flushPtr
+
+--
 readPNGImage :: String -> IO PNGImage
 readPNGImage pngFilename = withCString pngFilename $ \c_png_filename -> do
     file <- c_fopen c_png_filename mode_rb
@@ -235,6 +273,32 @@ readPNGImage pngFilename = withCString pngFilename $ \c_png_filename -> do
         \rowpp -> c_png_read_image png rowpp
     c_png_read_end png nullPtr
     c_fclose file
+    return PNGImage
+        { widthImage = width
+        , heightImage = height
+        , rowsImage = rows }
+
+--
+readPNGImageWithCallback :: (Ptr Word8 -> CSize -> IO ()) -> IO PNGImage
+readPNGImageWithCallback readFN = do
+    readPtr <- c_wrapReadFn (const readFN)
+    png <- c_png_create_read_struct
+        c_PNG_LIBPNG_VER_STRING nullPtr nullPtr nullPtr
+    info <- c_png_create_info_struct png
+    c_png_set_read_fn png nullPtr readPtr
+    c_png_read_info png info
+    width <- c_png_get_image_width png info
+    height <- c_png_get_image_height png info
+    color_type <- c_png_get_color_type png info
+    if color_type == c_PNG_COLOR_TYPE_RGB
+        then c_png_set_filler png 255 c_PNG_FILLER_AFTER
+        else return ()
+    rows <- replicateM (fromIntegral $ height) (rowEmpty width)
+    withForeignPtrs (map foreignPtrRow rows) $
+        \rowps -> withArray rowps $
+        \rowpp -> c_png_read_image png rowpp
+    c_png_read_end png nullPtr
+    freeHaskellFunPtr readPtr
     return PNGImage
         { widthImage = width
         , heightImage = height
